@@ -32,3 +32,9 @@ req_export:
 # Export Poetry dependencies to requirements.txt file format with dev dependencies
 req_export_with_dev:
 	poetry export --without-hashes --dev --format requirements.txt --output requirements.txt
+
+# Clean cache files
+clean_cache_files:
+	find . -name '*.pyc' -delete
+	find . -name '__pycache__' -type d | xargs rm -fr
+	find . -name '.pytest_cache' -type d | xargs rm -fr
