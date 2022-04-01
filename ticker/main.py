@@ -1,9 +1,8 @@
 # https://finance.yahoo.com/
+import locale
 import os
 from datetime import datetime
 from time import sleep
-import locale
-
 
 import yfinance as yf
 from rich import print as rprint
@@ -40,11 +39,10 @@ for index in range(100):
 
     for ticker in data.tickers.items():
         price = to_currency(
-            ticker[1].info['regularMarketPrice'],
-            ticker[1].info['currency']
+            ticker[1].info['regularMarketPrice'], ticker[1].info['currency']
         )
-        shortName = ticker[1].info['shortName']
-        rprint(f'{ticker[0]}: {price} - {shortName}')
+        short_name = ticker[1].info['shortName']
+        rprint(f'{ticker[0]}: {price} - {short_name}')
 
     rprint()
 
