@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Basic Docker Compose commands
+alias dc="docker compose"
+alias build="docker compose build"
+alias up="docker compose up"
+alias down="docker compose down"
+
+# Combined command with safety check
+alias build-and-up='docker compose down && docker compose build && docker compose up'
+alias docker-restart='docker compose down && docker compose build && docker compose up && docker rmi $(docker images -q --filter "dangling=false" --filter "label=com.docker.compose.project=$(basename $(pwd))")'
+
+# Additional useful commands
+alias logs="docker compose logs -f"
+alias ps="docker compose ps"
+alias restart="docker compose restart"

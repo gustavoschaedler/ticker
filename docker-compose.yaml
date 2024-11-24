@@ -1,0 +1,46 @@
+services:
+  # WebSocket Service Configuration
+  # Handles real-time cryptocurrency price updates
+  websocket:
+    env_file:
+      - .env
+    container_name: websocket
+    build:
+      # Build context from current directory
+      context: .
+      # Using Dockerfile from app directory
+      dockerfile: app/Dockerfile
+    ports:
+      # Maps container port to host port from .env
+      - "${WEBSOCKET_PORT}:${CONTAINER_PORT}"
+    environment:
+      # Environment variables from .env file
+      - TICKER=${BINANCE_TICKER}
+      - TOKEN=${AUTH_TOKEN}
+    networks:
+      # Connects to the application network
+      - app-network
+
+  # Web Frontend Service Configuration
+  # Serves the HTML/CSS/JS frontend application
+  web:
+    env_file:
+      - .env
+    container_name: web
+    build:
+      # Build context from current directory
+      context: .
+      # Using Dockerfile from web directory
+      dockerfile: web/Dockerfile
+    ports:
+      # Maps container port 80 to host port from .env
+      - "${WEB_PORT}:80"
+    networks:
+      # Connects to the application network
+      - app-network
+
+# Network Configuration
+networks:
+  # Defines a bridge network for service communication
+  app-network:
+    driver: bridge

@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Price Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/2.3.0/luxon.min.js"></script>
+    <script src="js/config.js"></script>
+    <style>
+        /**
+         * Root variables for dark theme
+         */
+        :root {
+            --bg-color: #2d2d2d;
+            --text-gray: #808080;
+            --text-blue: #4285f4;
+            --text-gold: #f7931a;
+            --text-green: #34a853;
+            --bitcoin-orange: #f7931a;
+            --card-bg: rgba(0, 0, 0, 0.2);
+            --card-shadow: none;
+            --text-color: #ffffff;
+            --modal-bg: #2d2d2d;
+            --modal-border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /**
+         * Light theme colours
+         */
+        [data-theme="light"] {
+            --bg-color: #ffffff;
+            --text-gray: #666666;
+            --text-blue: #1a73e8;
+            --text-gold: #f7931a;
+            --text-green: #34a853;
+            --bitcoin-orange: #f7931a;
+            --card-bg: #ffffff;
+            --card-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            --text-color: #333333;
+            --modal-bg: #ffffff;
+            --modal-border: 1px solid #e0e0e0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .price-display {
+            background-color: var(--card-bg);
+            box-shadow: var(--card-shadow);
+            color: var(--text-color);
+            padding: 20px;
+            border-radius: 12px;
+            width: fit-content;
+            margin: 0 auto;
+            min-width: 300px;
+            max-width: 90%;
+            overflow: hidden;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .price-display.expanded {
+            width: 75vw;
+            max-width: 75vw;
+            height: 75vh;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+
+        .price-display.expanded .current-time {
+            font-size: 32px;
+        }
+
+        .price-display.expanded .high-low .label {
+            font-size: 32px;
+        }
+
+        .price-display.expanded .high-low .value {
+            font-size: 48px;
+        }
+
+        .price-display.expanded .bitcoin-logo {
+            width: 100px;
+            height: 100px;
+            font-size: 60px;
+        }
+
+        .price-display.expanded .main-price {
+            font-size: clamp(48px, 15vw, 120px);
+        }
+
+        .price-display.expanded .price-change {
+            font-size: 28px;
+        }
+
+        /**
+         * Mobile responsive adjustments
+         */
+        @media screen and (max-width: 768px) {
+            .price-display.expanded {
+                width: 90vw;
+                height: 90vh;
+            }
+            
+            .price-display.expanded .high-low .label {
+                font-size: 24px;
+            }
+            
+            .price-display.expanded .high-low .value {
+                font-size: 36px;
+            }
+            
+            .price-display.expanded .current-time {
+                font-size: 28px;
+            }
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .connection-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #34a853; /* Google green */
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .connection-status.disconnected {
+            background-color: #ea4335; /* Google red */
+        }
+
+        /**
+         * Pulse animation for active connection
+         */
+        .connection-status::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: inherit;
+            opacity: 0.4;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.4;
+            }
+            50% {
+                transform: scale(2);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0;
+            }
+        }
+
+        /**
+         * Remove animation when disconnected
+         */
+        .connection-status.disconnected::after {
+            animation: none;
+            opacity: 0;
+        }
+
+        .current-time {
+            color: var(--text-gray);
+            font-size: 24px;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        .current-time.disconnected {
+            animation: blinkRed 1s infinite;
+        }
+
+        @keyframes blinkRed {
+            0% { color: white; }
+            50% { color: #ea4335; }
+            100% { color: white; }
+        }
+
+        .controls-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+        }
+
+        .settings-toggle {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .settings-toggle img {
+            width: 24px;
+            height: 24px;
+            filter: brightness(0.7);
+        }
+
+        .price-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .high-low {
+            text-align: center;
+            color: var(--text-gray);
+        }
+
+        .high-low .label {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .high-low .value {
+            color: var(--text-blue);
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .bitcoin-logo {
+            width: 70px;
+            height: 70px;
+            background: var(--bitcoin-orange);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 40px;
+        }
+
+        .main-price {
+            color: var(--text-gold);
+            font-size: clamp(32px, 12vw, 96px);
+            font-weight: bold;
+            text-align: center;
+            margin: 30px 0;
+            letter-spacing: 2px;
+            padding: 0 20px;
+            word-break: break-word;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .price-change {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            font-size: 20px;
+        }
+
+        .price-change.positive {
+            color: var(--text-green);
+        }
+
+        .price-change.negative {
+            color: #c5221f;
+        }
+
+        .settings-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .settings-content {
+            background-color: var(--modal-bg);
+            border: var(--modal-border);
+            color: var(--text-color);
+            padding: 20px;
+            border-radius: 12px;
+            width: 266px;
+            margin: 20px auto 0;
+            position: relative;
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 13px;
+            padding-right: 10px;
+        }
+
+        .settings-title-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .settings-title-row h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            color: var(--text-gray);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .settings-group {
+            margin-bottom: 10px;
+        }
+
+        .settings-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-gray);
+            font-size: 12px;
+        }
+
+        .settings-group input {
+            width: 100%;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid var(--text-gray);
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            font-size: 12px;
+        }
+
+        .settings-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 13px;
+        }
+
+        .settings-buttons button {
+            padding: 5px 11px;
+            border-radius: 4px;
+            border: none;
+            color: white;
+            cursor: pointer;
+            opacity: 0.5;
+            pointer-events: none;
+            min-width: 67px;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        .settings-buttons button:first-child {
+            background-color: #34a853;
+        }
+
+        .settings-buttons button:last-child {
+            background-color: #ea4335;
+        }
+
+        .settings-buttons button.enabled {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .settings-buttons button.enabled:hover {
+            filter: brightness(1.1);
+        }
+
+        .settings-buttons button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .theme-toggle {
+            margin-left: 13px;
+            transform: scale(0.67);
+        }
+
+        .theme-switch {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .theme-label {
+            position: relative;
+            display: block;
+            width: 60px;
+            height: 30px;
+            background-color: #4285f4;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .theme-label:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .theme-switch:checked + .theme-label {
+            background-color: #f4b400;
+        }
+
+        .theme-switch:checked + .theme-label:before {
+            transform: translateX(30px);
+        }
+
+        .theme-icon {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+            color: white;
+            font-size: 14px;
+        }
+
+        .theme-icon:first-child {
+            left: 8px;
+        }
+
+        .theme-icon:last-child {
+            right: 8px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            z-index: 1000;
+            display: none;
+            text-align: center;
+            min-width: 200px;
+            max-width: 80%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .toast.error {
+            background-color: #ea4335;
+        }
+
+        .toast.success {
+            background-color: #34a853;
+        }
+
+        .toast.info {
+            background-color: #4285f4;
+        }
+
+        .reload-button {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            padding: 5px;
+            color: var(--text-gray);
+            transition: transform 0.3s ease;
+        }
+
+        .reload-button:hover {
+            transform: rotate(180deg);
+        }
+
+        /**
+         * Media Queries for responsive adjustments on smaller screens
+         */
+        @media screen and (max-width: 480px) {
+            .high-low .value {
+                font-size: 24px;
+            }
+
+            .high-low .label {
+                font-size: 18px;
+            }
+
+            .bitcoin-logo {
+                width: 50px;
+                height: 50px;
+                font-size: 30px;
+            }
+
+            .price-change {
+                font-size: 16px;
+            }
+
+            .current-time {
+                font-size: 20px;
+            }
+        }
+
+        .expand-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: var(--text-gray);
+            font-size: 32px;
+            cursor: pointer;
+            padding: 5px;
+            transition: transform 0.3s ease;
+        }
+
+        .expand-button:hover {
+            transform: scale(1.1);
+        }
+
+        .expanded .expand-button {
+            transform: rotate(180deg);
+        }
+
+        .expanded .expand-button:hover {
+            transform: rotate(180deg) scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="price-display">
+            <div class="header">
+                <div id="connectionStatus" class="connection-status"></div>
+                <div id="currentTime" class="current-time">hh:mm:ss</div>
+                <div class="controls-section">
+                    <button class="settings-toggle" onclick="toggleSettings()">⚙️</button>
+                </div>
+            </div>
+
+            <div class="price-info">
+                <div class="high-low">
+                    <div class="label">24H HIGH</div>
+                    <div class="value" id="highPrice">$0,00</div>
+                </div>
+                <div class="bitcoin-logo">₿</div>
+                <div class="high-low">
+                    <div class="label">24H LOW</div>
+                    <div class="value" id="lowPrice">$0,00</div>
+                </div>
+            </div>
+
+            <div class="main-price">$<span id="lastPrice">0,00</span></div>
+            <div class="price-change positive" id="priceChange">
+                <span class="arrow">↑</span>
+                <span class="change-value">$0,00 (0,00%)</span>
+            </div>
+            <button class="reload-button" onclick="reloadPage()">⟳</button>
+            <button class="expand-button" onclick="toggleExpand()">⤢</button>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="settings-modal" style="display: none;">
+        <div class="settings-content">
+            <div class="settings-header">
+                <div class="settings-title-row">
+                    <h2>Settings</h2>
+                    <div class="theme-toggle">
+                        <input type="checkbox" id="themeSwitch" class="theme-switch">
+                        <label for="themeSwitch" class="theme-label">
+                            <span class="theme-icon">🌙</span>
+                            <span class="theme-icon">☀️</span>
+                        </label>
+                    </div>
+                </div>
+                <button class="close-button" onclick="toggleSettings()">×</button>
+            </div>
+            <div class="settings-group">
+                <label for="serverUrl">Server URL:</label>
+                <input type="text" id="serverUrl" value="">
+            </div>
+            <div class="settings-group">
+                <label for="authToken">Auth Token:</label>
+                <input type="text" id="authToken" value="">
+            </div>
+            <div class="settings-buttons">
+                <button class="enabled">Connect</button>
+                <button>Disconnect</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * WebSocket connection instance and chart configurations
+         */
+        let ws = null;
+        let currentTheme = localStorage.getItem('theme') || 'light';
+
+        // Initialize theme
+        document.documentElement.setAttribute('data-theme', currentTheme);
+
+        /**
+         * Toggles between light and dark theme
+         */
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            localStorage.setItem('theme', currentTheme);
+        }
+
+        /**
+         * Displays toast notifications
+         * @param {string} message - Message to display
+         * @param {string} type - Type of toast (info, error, success)
+         */
+        function showToast(message, type = 'info') {
+            let toast = document.getElementById('toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast';
+                document.body.appendChild(toast);
+            }
+
+            // Clear existing timeout
+            if (toast.timeoutId) {
+                clearTimeout(toast.timeoutId);
+            }
+
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.style.display = 'block';
+
+            // Set new timeout
+            toast.timeoutId = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 5000);
+        }
+
+        /**
+         * Formats currency values
+         * @param {number} value - Value to format
+         * @param {number} decimals - Number of decimal places
+         * @returns {string} Formatted currency string
+         */
+        function formatCurrency(value, decimals = 0) {
+            return new Intl.NumberFormat('en-GB', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(value);
+        }
+
+        /**
+         * Updates the current time display
+         */
+        function updateCurrentTime() {
+            const now = luxon.DateTime.local();
+            document.getElementById('currentTime').textContent = now.toFormat('HH:mm:ss');
+        }
+
+        setInterval(updateCurrentTime, 1000);
+        updateCurrentTime();
+
+        /**
+         * Updates the connection status indicator
+         * @param {boolean} connected - Connection state
+         */
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            const currentTime = document.getElementById('currentTime');
+            
+            if (status) {
+                if (connected) {
+                    status.classList.remove('disconnected');
+                    status.classList.add('connected');
+                    if (currentTime) {
+                        currentTime.classList.remove('disconnected');
+                    }
+                } else {
+                    status.classList.remove('connected');
+                    status.classList.add('disconnected');
+                    if (currentTime) {
+                        currentTime.classList.add('disconnected');
+                    }
+                    
+                    // Reset values when disconnected
+                    resetDisplayValues();
+                }
+            }
+        }
+
+        /**
+         * Resets display values to default state
+         */
+        function resetDisplayValues() {
+            const elements = {
+                lastPrice: document.getElementById('lastPrice'),
+                highPrice: document.getElementById('highPrice'),
+                lowPrice: document.getElementById('lowPrice'),
+                priceChange: document.getElementById('priceChange')
+            };
+
+            if (elements.lastPrice) elements.lastPrice.textContent = '0,000';
+            if (elements.highPrice) elements.highPrice.textContent = '$0.00';
+            if (elements.lowPrice) elements.lowPrice.textContent = '$0.00';
+            if (elements.priceChange) {
+                elements.priceChange.innerHTML = `
+                    <span class="arrow">-</span>
+                    <span class="change-value">$0.00 (0.00%)</span>
+                `;
+            }
+        }
+
+        /**
+         * Updates price display with new data
+         * @param {Object} data - Price data object
+         */
+        function updatePriceDisplay(data) {
+            try {
+                const lastPrice = document.getElementById('lastPrice');
+                const highPrice = document.getElementById('highPrice');
+                const lowPrice = document.getElementById('lowPrice');
+                const priceChange = document.getElementById('priceChange');
+
+                // Function to format numbers
+                const formatNumber = (num) => {
+                    if (!num) return '-';
+                    return new Intl.NumberFormat('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                    }).format(num);
+                };
+
+                // Update Last Price
+                if (data.last_price) {
+                    lastPrice.textContent = formatNumber(parseFloat(data.last_price));
+                }
+
+                // Update High Price
+                if (data.high_price) {
+                    highPrice.textContent = '$' + formatNumber(parseFloat(data.high_price));
+                }
+
+                // Update Low Price
+                if (data.low_price) {
+                    lowPrice.textContent = '$' + formatNumber(parseFloat(data.low_price));
+                }
+
+                // Update Price Change
+                if (data.price_change && data.price_change_percent) {
+                    const priceChangeValue = parseFloat(data.price_change);
+                    const percentChange = parseFloat(data.price_change_percent).toFixed(2);
+                    const arrow = priceChangeValue >= 0 ? '↑' : '↓';
+                    const formattedChange = Math.abs(priceChangeValue).toFixed(2);
+
+                    priceChange.innerHTML = `
+                        <span class="arrow">${arrow}</span>
+                        <span class="change-value">$${formattedChange} (${percentChange}%)</span>
+                    `;
+
+                    priceChange.className = `price-change ${priceChangeValue >= 0 ? 'positive' : 'negative'}`;
+                }
+
+            } catch (error) {
+                console.error('Error updating prices:', error);
+                console.error('Received data:', data);
+            }
+        }
+
+        /**
+         * Establishes WebSocket connection
+         */
+        function connect() {
+            try {
+                const serverUrl = document.getElementById('serverUrl').value;
+                const authToken = document.getElementById('authToken').value;
+
+                if (!serverUrl || !authToken) {
+                    showToast('Please provide both server URL and authentication token', 'error');
+                    return;
+                }
+
+                if (ws) {
+                    ws.close();
+                    ws = null;
+                }
+
+                ws = new WebSocket(serverUrl);
+
+                ws.onopen = () => {
+                    console.log('Connected to WebSocket server');
+                    updateConnectionStatus(true);
+                    updateButtons();
+                    
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ token: authToken }));
+                        toggleSettings();
+                    }
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        updatePriceDisplay(data);
+                    } catch (error) {
+                        console.error('Erro ao processar mensagem:', error);
+                        showToast('Erro ao processar dados do servidor', 'error');
+                    }
+                };
+
+                ws.onclose = (event) => {
+                    console.log('WebSocket connection closed:', {
+                        code: event.code,
+                        reason: event.reason,
+                        wasClean: event.wasClean
+                    });
+                    
+                    ws = null;
+                    updateConnectionStatus(false);
+                    updateButtons();
+
+                    if (!event.wasClean) {
+                        showToast('Connection closed unexpectedly. Check server status.', 'error');
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', {
+                        error: error,
+                        readyState: ws ? ws.readyState : 'null',
+                        url: serverUrl
+                    });
+                    
+                    showToast('Unable to connect to server. Please check if the server is running and accessible.', 'error');
+                    updateConnectionStatus(false);
+                    updateButtons();
+                };
+
+            } catch (error) {
+                console.error('Error in connect function:', error);
+                showToast('Failed to create WebSocket connection', 'error');
+                updateConnectionStatus(false);
+                updateButtons();
+            }
+        }
+
+        /**
+         * Toggles expanded view state
+         */
+        function toggleExpand() {
+            const priceDisplay = document.querySelector('.price-display');
+            const expandButton = document.querySelector('.expand-button');
+            
+            priceDisplay.classList.toggle('expanded');
+            
+            // Toggle between expand (⤢) and compress (⤡) icons
+            expandButton.textContent = priceDisplay.classList.contains('expanded') ? '⤡' : '⤢';
+        }
+
+        /**
+         * Forces page reload without cache
+         */
+        function reloadPage() {
+            window.location.reload(true);
+        }
+
+        // Event Listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const priceDisplay = document.querySelector('.price-display');
+                if (priceDisplay.classList.contains('expanded')) {
+                    toggleExpand();
+                }
+            }
+        });
+
+        // Initialisation on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check and create required elements if necessary
+            const requiredElements = ['lastPrice', 'highPrice', 'lowPrice', 'priceChange'];
+            requiredElements.forEach(id => {
+                if (!document.getElementById(id)) {
+                    console.error(`Required element #${id} not found in DOM`);
+                }
+            });
+
+            // Add event listeners to buttons
+            const connectBtn = document.querySelector('.settings-buttons button:first-child');
+            const disconnectBtn = document.querySelector('.settings-buttons button:last-child');
+
+            if (connectBtn) {
+                connectBtn.addEventListener('click', connect);
+            }
+            if (disconnectBtn) {
+                disconnectBtn.addEventListener('click', disconnect);
+            }
+        });
+
+        // Format last price to ensure it fits in the container
+        function formatLastPrice(price) {
+            return new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(price);
+        }
+
+        // Theme control initialisation
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeSwitch = document.getElementById('themeSwitch');
+            
+            // Load saved theme
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            themeSwitch.checked = savedTheme === 'light';
+
+            themeSwitch.addEventListener('change', function() {
+                const theme = this.checked ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                
+                // Update current theme
+                currentTheme = theme;
+            });
+
+            // Set default values from CONFIG
+            document.getElementById('serverUrl').value = CONFIG.WS_URL;
+            document.getElementById('authToken').value = CONFIG.AUTH_TOKEN;
+            
+            // Try to connect automatically
+            connect();
+        });
+
+        function isConnected() {
+            return ws !== null && ws.readyState === WebSocket.OPEN;
+        }
+
+        function disconnect() {
+            try {
+                if (ws) {
+                    ws.close(1000, 'User initiated disconnect');
+                    ws = null;
+                    updateConnectionStatus(false);
+                    updateButtons();
+                    toggleSettings();
+                }
+            } catch (error) {
+                console.error('Error in disconnect function:', error);
+                showToast('Error disconnecting', 'error');
+            }
+        }
+
+        // Handle modal close when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('settingsModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close(1000, 'Page unload');
+            }
+        });
+
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            if (modal) {
+                modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+                if (modal.style.display === 'block') {
+                    updateButtons();
+                }
+            }
+        }
+
+        /**
+         * Updates the buttons state in the settings modal
+         */
+        function updateButtons() {
+            try {
+                const connectBtn = document.querySelector('.settings-buttons button:first-child');
+                const disconnectBtn = document.querySelector('.settings-buttons button:last-child');
+                
+                if (connectBtn && disconnectBtn) {
+                    const connected = isConnected();
+                    
+                    // Update button classes and state
+                    connectBtn.classList.toggle('enabled', !connected);
+                    disconnectBtn.classList.toggle('enabled', connected);
+                    
+                    // Update disabled state
+                    connectBtn.disabled = connected;
+                    disconnectBtn.disabled = !connected;
+                }
+            } catch (error) {
+                console.error('Error updating buttons:', error);
+            }
+        }
+
+        /**
+         * Ensure all required elements exist in the HTML
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check and create required elements if necessary
+            const requiredElements = ['lastPrice', 'highPrice', 'lowPrice', 'priceChange'];
+            requiredElements.forEach(id => {
+                if (!document.getElementById(id)) {
+                    console.error(`Required element #${id} not found in DOM`);
+                }
+            });
+
+            // Add event listeners to buttons
+            const connectBtn = document.querySelector('.settings-buttons button:first-child');
+            const disconnectBtn = document.querySelector('.settings-buttons button:last-child');
+
+            if (connectBtn) {
+                connectBtn.addEventListener('click', connect);
+            }
+            if (disconnectBtn) {
+                disconnectBtn.addEventListener('click', disconnect);
+            }
+        });
+    </script>
+</body>
+</html>

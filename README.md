@@ -1,2 +1,2 @@
 # ticker
-Cotação automatizada de moedas, ações e criptomoedas.
+Automated quotes for currencies, stocks, and cryptocurrencies.
