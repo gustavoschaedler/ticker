@@ -3,6 +3,12 @@ Automated quotes for currencies, stocks, and cryptocurrencies.
 
 TLDR;
 
+
+### Rename the file:
+```
+.env_example to .env
+```
+
 ```
 docker compose up
 ```
