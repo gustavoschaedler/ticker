@@ -1,4 +1,4 @@
-# ticker
+# BTC ticker via WebSocket
 Automated quotes for currencies, stocks, and cryptocurrencies.
 
 TLDR;
